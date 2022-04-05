@@ -43,6 +43,16 @@ abstract contract vault is IERC20 {
     constructor() {}
 
     /// @param locked is a userBalance struct
+    modifier lock(userBalance memory locked) {
+        if (locked.timeLockIsActive) {
+            require(locked.timelock >= block.timestamp);
+        }
+        if (locked.blockLockIsActive) {
+            require(locked.blocklock >= block.number);
+        }
+        _;
+    }
+
     modifier timelock(userBalance memory locked) {
         /// @notice locked.timelock is defined as the current timestamp of the block it is created at + the amount of time it should be locked for
         require(locked.timeLockIsActive);
@@ -52,7 +62,7 @@ abstract contract vault is IERC20 {
 
     modifier blocklock(userBalance memory locked) {
         require(locked.blockLockIsActive);
-        require(block.number >= locked.blocklock);
+        require(locked.blocklock >= block.number);
         _;
     }
 
