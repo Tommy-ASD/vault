@@ -11,15 +11,17 @@ import "../interfaces/IERC20.sol";
 abstract contract vault is IERC20 {
     //definitely optimizable
     mapping(address => uint256) private _userNonce;
-
     /// @dev maps user address to token address
     /// @dev maps token address to nonce
     /// @dev maps nonce to userBalance struct
+    /// @dev vaults stored as NFTs?
     mapping(address => mapping(address => mapping(uint256 => userBalance)))
         private _tokensDeposited;
 
+    //TODO: add time requirement
     struct userBalance {
         uint256 amount;
+        uint256 timelock;
     }
 
     event deposited(
@@ -37,13 +39,25 @@ abstract contract vault is IERC20 {
 
     constructor() {}
 
-    function deposit(address _tokenAddress, uint256 _amount) public {
+    modifier lock(userBalance memory locked) {
+        /// @notice locked.timelock is defined as the current timestamp of the block it is created at + the amount of time it should be locked for
+        require(locked.timelock >= block.timestamp);
+        _;
+    }
+
+    function deposit(
+        address _tokenAddress,
+        uint256 _amount,
+        uint256 _time
+    ) public {
         IERC20 token = IERC20(_tokenAddress);
+        //can't transfer from unless approved
         require(token.allowance(msg.sender, address(this)) >= _amount);
         token.transferFrom(msg.sender, address(this), _amount);
+        //create new userBalance struct
         _tokensDeposited[msg.sender][_tokenAddress][
             _userNonce[msg.sender]
-        ] = userBalance(_amount);
+        ] = userBalance(_amount, block.timestamp + _time);
         _userNonce[msg.sender] += 1;
     }
 
@@ -54,7 +68,7 @@ abstract contract vault is IERC20 {
         address _tokenAddress,
         uint256 _nonce,
         uint256 _amount
-    ) public {
+    ) public lock(_tokensDeposited[msg.sender][_tokenAddress][_nonce]) {
         /// @dev _tokensDeposited[msg.sender][_tokenAddress][_nonce] points to a userBalance struct
         /// @dev _tokensDeposited maps an address (msg.sender) to a token address (_tokenAddress)
         /// @dev It then maps that _tokenAddress to a uint (_nonce)
