@@ -21,10 +21,8 @@ abstract contract vault is IERC20 {
     //TODO: add time requirement
     struct userBalance {
         uint256 amount;
-        bool timeLockIsActive;
-        uint256 timelock;
-        bool blockLockIsActive;
-        uint256 blocklock;
+        lockType _lockType;
+        uint256 lockTime;
     }
 
     event deposited(
@@ -42,27 +40,20 @@ abstract contract vault is IERC20 {
 
     constructor() {}
 
+    enum lockType {
+        TIME,
+        BLOCK,
+        PRICE
+    }
+
     /// @param locked is a userBalance struct
     modifier lock(userBalance memory locked) {
-        if (locked.timeLockIsActive) {
-            require(locked.timelock >= block.timestamp);
+        if (locked._lockType == lockType.TIME) {
+            require(locked.lockTime >= block.timestamp);
         }
-        if (locked.blockLockIsActive) {
-            require(locked.blocklock >= block.number);
+        if (locked._lockType == lockType.BLOCK) {
+            require(locked.lockTime >= block.number);
         }
-        _;
-    }
-
-    modifier timelock(userBalance memory locked) {
-        /// @notice locked.timelock is defined as the current timestamp of the block it is created at + the amount of time it should be locked for
-        require(locked.timeLockIsActive);
-        require(locked.timelock >= block.timestamp);
-        _;
-    }
-
-    modifier blocklock(userBalance memory locked) {
-        require(locked.blockLockIsActive);
-        require(locked.blocklock >= block.number);
         _;
     }
 
@@ -78,7 +69,7 @@ abstract contract vault is IERC20 {
         //create new userBalance struct
         _tokensDeposited[msg.sender][_tokenAddress][
             _userNonce[msg.sender]
-        ] = userBalance(_amount, true, block.timestamp + _time, false, 0);
+        ] = userBalance(_amount, lockType.TIME, block.timestamp + _time);
         _userNonce[msg.sender] += 1;
     }
 
@@ -94,7 +85,7 @@ abstract contract vault is IERC20 {
         //create new userBalance struct
         _tokensDeposited[msg.sender][_tokenAddress][
             _userNonce[msg.sender]
-        ] = userBalance(_amount, false, 0, true, block.number + _blocks);
+        ] = userBalance(_amount, lockType.BLOCK, block.number + _blocks);
         _userNonce[msg.sender] += 1;
     }
 
@@ -109,7 +100,7 @@ abstract contract vault is IERC20 {
         address _tokenAddress,
         uint256 _nonce,
         uint256 _amount
-    ) public timelock(_tokensDeposited[msg.sender][_tokenAddress][_nonce]) {
+    ) public lock(_tokensDeposited[msg.sender][_tokenAddress][_nonce]) {
         /// @dev _tokensDeposited[msg.sender][_tokenAddress][_nonce] points to a userBalance struct
         /// @dev _tokensDeposited maps an address (msg.sender) to a token address (_tokenAddress)
         /// @dev It then maps that _tokenAddress to a uint (_nonce)
